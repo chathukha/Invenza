@@ -6,12 +6,14 @@ A touch-friendly POS MVP for sales, inventory, and basic reports.
 
 - Responsive POS screen for mobile, tablet, and desktop
 - Product/category search and fast cart controls
+- System-generated 8-digit product codes starting from `00000001`
 - Clickable Current Sale item list with popup item editing
 - Customer selection on sales
 - Line-level discount by amount or percent
 - Bill-level discount by amount or percent
-- Two-step checkout with Cash, Card, Bank Transfer, and QR payment modes
-- Receipt preview with print and WhatsApp bill actions
+- Compact two-step checkout with visible `Enter Payments`
+- Multiple payment lines per bill using Cash, Card, Bank Transfer, and QR
+- Receipt preview with print, PDF download, and WhatsApp PDF share actions
 - Product and inventory management
 - Customer, supplier, and category master files
 - GRN goods received transactions

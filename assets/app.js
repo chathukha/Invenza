@@ -42,6 +42,53 @@ const PAYMENT_MODES = [
   { id: "qr", label: "QR", hint: "QR wallet payment" }
 ];
 
+function formatProductCode(value) {
+  return String(Math.max(1, Math.trunc(toNumber(value, 1)))).padStart(8, "0");
+}
+
+function isGeneratedProductCode(value) {
+  return /^\d{8}$/.test(String(value || ""));
+}
+
+function assignGeneratedProductCodes(products) {
+  const used = new Set();
+  let nextCode = 1;
+
+  for (const product of products) {
+    const code = String(product.sku || "").trim();
+    if (isGeneratedProductCode(code) && !used.has(code)) {
+      product.sku = code;
+      used.add(code);
+      nextCode = Math.max(nextCode, Number(code) + 1);
+    } else {
+      product.sku = "";
+    }
+  }
+
+  for (const product of products) {
+    if (product.sku) continue;
+    let code = formatProductCode(nextCode);
+    while (used.has(code)) {
+      nextCode += 1;
+      code = formatProductCode(nextCode);
+    }
+    product.sku = code;
+    used.add(code);
+    nextCode += 1;
+  }
+
+  return products;
+}
+
+function nextProductCode(productId = null) {
+  const products = state.data?.products || [];
+  const highest = products.reduce((max, product) => {
+    if (product.id === productId) return max;
+    return isGeneratedProductCode(product.sku) ? Math.max(max, Number(product.sku)) : max;
+  }, 0);
+  return formatProductCode(highest + 1);
+}
+
 function makeId() {
   return crypto.randomUUID();
 }
@@ -64,7 +111,7 @@ function defaultData() {
       category_id: beverages,
       supplier_id: generalSupplier,
       name: "Water Bottle 1L",
-      sku: "BEV-001",
+      sku: "00000001",
       barcode: "479000000001",
       cost_price: 80,
       selling_price: 130,
@@ -80,7 +127,7 @@ function defaultData() {
       category_id: beverages,
       supplier_id: generalSupplier,
       name: "Iced Coffee",
-      sku: "BEV-002",
+      sku: "00000002",
       barcode: "479000000002",
       cost_price: 160,
       selling_price: 260,
@@ -96,7 +143,7 @@ function defaultData() {
       category_id: snacks,
       supplier_id: generalSupplier,
       name: "Potato Chips",
-      sku: "SNK-001",
+      sku: "00000003",
       barcode: "479000000003",
       cost_price: 120,
       selling_price: 210,
@@ -112,7 +159,7 @@ function defaultData() {
       category_id: grocery,
       supplier_id: grocerySupplier,
       name: "Rice 5kg",
-      sku: "GRC-001",
+      sku: "00000004",
       barcode: "479000000004",
       cost_price: 1450,
       selling_price: 1750,
@@ -128,7 +175,7 @@ function defaultData() {
       category_id: essentials,
       supplier_id: generalSupplier,
       name: "Soap Pack",
-      sku: "ESS-001",
+      sku: "00000005",
       barcode: "479000000005",
       cost_price: 220,
       selling_price: 320,
@@ -144,7 +191,7 @@ function defaultData() {
       category_id: essentials,
       supplier_id: generalSupplier,
       name: "Toothpaste",
-      sku: "ESS-002",
+      sku: "00000006",
       barcode: "479000000006",
       cost_price: 280,
       selling_price: 420,
@@ -244,9 +291,11 @@ function normalizeData(data) {
     categories: Array.isArray(data.categories) ? data.categories : seeded.categories,
     customers: Array.isArray(data.customers) ? data.customers : seeded.customers,
     suppliers: Array.isArray(data.suppliers) ? data.suppliers : seeded.suppliers,
-    products: Array.isArray(data.products)
-      ? data.products.map((product) => ({ supplier_id: null, is_active: true, ...product }))
-      : seeded.products,
+    products: assignGeneratedProductCodes(
+      Array.isArray(data.products)
+        ? data.products.map((product) => ({ supplier_id: null, is_active: true, ...product }))
+        : seeded.products
+    ),
     sales: Array.isArray(data.sales) ? data.sales : [],
     sale_items: Array.isArray(data.sale_items) ? data.sale_items : [],
     payments: Array.isArray(data.payments) ? data.payments : [],
@@ -730,7 +779,7 @@ function renderPos() {
     <section class="toolbar">
       <div>
         <h2>Sales</h2>
-        <p>Touch products, scan barcode into search, then checkout.</p>
+        <p>Touch products, search code/barcode, then checkout.</p>
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" data-action="clear-cart">Clear Cart</button>
@@ -742,7 +791,7 @@ function renderPos() {
         <div class="catalog-controls">
           <label class="search-box">
             <span class="mini-label">Search or barcode</span>
-            <input id="productSearch" value="${esc(state.search)}" placeholder="Search product, SKU, or scan barcode" autocomplete="off" />
+            <input id="productSearch" value="${esc(state.search)}" placeholder="Search product, code, or scan barcode" autocomplete="off" />
           </label>
           <button class="button secondary" data-action="focus-search">${icon("search")} Search</button>
         </div>
@@ -1906,6 +1955,7 @@ function renderProductModal() {
   const title = product ? "Edit Product" : "Add Product";
   const categories = activeCategories();
   const suppliers = activeSuppliers();
+  const productCode = product?.sku || nextProductCode();
 
   return `
     <div class="modal-backdrop">
@@ -1922,8 +1972,8 @@ function renderProductModal() {
               <input name="name" value="${esc(product?.name || "")}" required />
             </label>
             <label class="field">
-              <span>SKU</span>
-              <input name="sku" value="${esc(product?.sku || "")}" required />
+              <span>Product code</span>
+              <input name="sku" value="${esc(productCode)}" readonly required />
             </label>
             <label class="field">
               <span>Barcode</span>
@@ -2835,11 +2885,12 @@ async function saveProduct(form) {
   const productId = form.id.value || null;
   const categoryId = await createCategoryIfNeeded(form);
   const product = productId ? findProduct(productId) : null;
+  const productCode = product?.sku || nextProductCode(productId);
   const payload = {
     category_id: categoryId,
     supplier_id: form.supplier_id.value || null,
     name: form.name.value.trim(),
-    sku: form.sku.value.trim(),
+    sku: productCode,
     barcode: form.barcode.value.trim() || null,
     cost_price: toNumber(form.cost_price.value),
     selling_price: toNumber(form.selling_price.value),
@@ -2850,7 +2901,7 @@ async function saveProduct(form) {
   };
 
   if (!payload.name || !payload.sku) {
-    showToast("Product name and SKU are required.");
+    showToast("Product name and product code are required.");
     return;
   }
 
@@ -2861,8 +2912,9 @@ async function saveProduct(form) {
         if (error) throw error;
       } else {
         const openingStock = toNumber(form.current_stock.value);
+        const { sku, ...insertPayload } = payload;
         const { data, error } = await supabase.from("products").insert({
-          ...payload,
+          ...insertPayload,
           current_stock: openingStock
         }).select("*").single();
         if (error) throw error;
@@ -3384,7 +3436,8 @@ app.addEventListener("click", async (event) => {
   }
 
   if (action === "print-receipt") window.print();
-  if (action === "whatsapp-receipt") sendWhatsAppReceipt();
+  if (action === "download-receipt-pdf" && state.modal?.receipt) downloadReceiptPdf(state.modal.receipt);
+  if (action === "whatsapp-receipt") await shareReceiptPdf();
   if (action === "reload-data") await reloadData();
 
   if (action === "sign-out" && supabase) {

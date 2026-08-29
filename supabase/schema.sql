@@ -5,6 +5,17 @@ create type public.inventory_movement_type as enum ('opening', 'grn', 'prn', 'sa
 create type public.payment_method as enum ('cash', 'card', 'bank_transfer', 'qr');
 create type public.sale_status as enum ('completed', 'cancelled');
 
+create sequence if not exists public.product_code_seq start with 1;
+
+create or replace function public.next_product_code()
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select lpad(nextval('public.product_code_seq')::text, 8, '0');
+$$;
+
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -74,7 +85,7 @@ create table public.products (
   category_id uuid references public.categories(id) on delete set null,
   supplier_id uuid references public.suppliers(id) on delete set null,
   name text not null,
-  sku text not null,
+  sku text not null default public.next_product_code(),
   barcode text,
   image_url text,
   cost_price numeric(12, 2) not null default 0,
@@ -86,7 +97,8 @@ create table public.products (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint products_selling_price_nonnegative check (selling_price >= 0),
-  constraint products_cost_price_nonnegative check (cost_price >= 0)
+  constraint products_cost_price_nonnegative check (cost_price >= 0),
+  constraint products_sku_8_digits check (sku ~ '^[0-9]{8}$')
 );
 
 create unique index products_sku_unique_active on public.products (lower(sku)) where is_active;
@@ -350,8 +362,7 @@ $$;
 
 create or replace function public.complete_sale(
   p_items jsonb,
-  p_payment_method public.payment_method,
-  p_amount_paid numeric,
+  p_payments jsonb,
   p_discount_total numeric default 0,
   p_bill_discount_type text default 'amount',
   p_bill_discount_value numeric default 0,
@@ -368,6 +379,9 @@ declare
   v_sale_id uuid;
   v_receipt_no text;
   v_item jsonb;
+  v_payment jsonb;
+  v_payment_index integer;
+  v_payment_count integer;
   v_product public.products%rowtype;
   v_qty numeric(12, 3);
   v_line_subtotal numeric(12, 2);
@@ -381,6 +395,9 @@ declare
   v_line_discount_total numeric(12, 2) := 0;
   v_tax_total numeric(12, 2) := 0;
   v_total numeric(12, 2) := 0;
+  v_payment_amount numeric(12, 2);
+  v_payment_method public.payment_method;
+  v_payment_total numeric(12, 2) := 0;
   v_stock_after numeric(12, 3);
   v_change numeric(12, 2);
 begin
@@ -390,6 +407,10 @@ begin
 
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'Sale must include at least one item';
+  end if;
+
+  if jsonb_typeof(p_payments) <> 'array' or jsonb_array_length(p_payments) = 0 then
+    raise exception 'Sale must include at least one payment';
   end if;
 
   p_discount_total := coalesce(p_discount_total, 0);
@@ -547,11 +568,27 @@ begin
 
   v_total := round(v_subtotal - v_line_discount_total + v_tax_total - p_discount_total, 2);
 
-  if p_amount_paid < v_total then
+  v_payment_count := jsonb_array_length(p_payments);
+
+  for v_payment, v_payment_index in
+    select value, ordinality::int
+    from jsonb_array_elements(p_payments) with ordinality as payment(value, ordinality)
+  loop
+    v_payment_method := (v_payment->>'method')::public.payment_method;
+    v_payment_amount := round(coalesce(nullif(v_payment->>'amount', '')::numeric, 0), 2);
+
+    if v_payment_amount <= 0 then
+      raise exception 'Payment amount must be greater than zero';
+    end if;
+
+    v_payment_total := v_payment_total + v_payment_amount;
+  end loop;
+
+  if v_payment_total < v_total then
     raise exception 'Paid amount is less than total';
   end if;
 
-  v_change := round(p_amount_paid - v_total, 2);
+  v_change := round(v_payment_total - v_total, 2);
 
   update public.sales
   set subtotal = v_subtotal,
@@ -564,18 +601,26 @@ begin
       total = v_total
   where id = v_sale_id;
 
-  insert into public.payments (
-    sale_id,
-    method,
-    amount,
-    change_amount
-  )
-  values (
-    v_sale_id,
-    p_payment_method,
-    p_amount_paid,
-    v_change
-  );
+  for v_payment, v_payment_index in
+    select value, ordinality::int
+    from jsonb_array_elements(p_payments) with ordinality as payment(value, ordinality)
+  loop
+    v_payment_method := (v_payment->>'method')::public.payment_method;
+    v_payment_amount := round(coalesce(nullif(v_payment->>'amount', '')::numeric, 0), 2);
+
+    insert into public.payments (
+      sale_id,
+      method,
+      amount,
+      change_amount
+    )
+    values (
+      v_sale_id,
+      v_payment_method,
+      v_payment_amount,
+      case when v_payment_index = v_payment_count then v_change else 0 end
+    );
+  end loop;
 
   return jsonb_build_object(
     'sale_id', v_sale_id,
@@ -587,8 +632,8 @@ begin
     'discount_total', v_line_discount_total + p_discount_total,
     'tax_total', v_tax_total,
     'total', v_total,
-    'payment_method', p_payment_method,
-    'amount_paid', p_amount_paid,
+    'payments', p_payments,
+    'amount_paid', v_payment_total,
     'change_amount', v_change
   );
 end;
@@ -756,7 +801,7 @@ left join public.products on products.id = inventory_movements.product_id
 left join public.suppliers on suppliers.id = inventory_movements.supplier_id;
 
 grant select on public.all_transactions to authenticated;
-grant execute on function public.complete_sale(jsonb, public.payment_method, numeric, numeric, text, numeric, text, uuid, text) to authenticated;
+grant execute on function public.complete_sale(jsonb, jsonb, numeric, text, numeric, text, uuid, text) to authenticated;
 grant execute on function public.post_inventory_document(uuid, public.inventory_movement_type, numeric, uuid, text, text) to authenticated;
 
 insert into public.store_settings (id)
