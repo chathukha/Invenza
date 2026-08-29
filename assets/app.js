@@ -10,6 +10,8 @@ const state = {
   categoryId: "all",
   search: "",
   inventorySearch: "",
+  itemSearch: "",
+  itemProductId: null,
   masterTab: "customers",
   masterSearch: "",
   transactionSearch: "",
@@ -717,6 +719,7 @@ function icon(name) {
     chart: '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-3"></path>',
     gear: '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2.1.4l-.1.1h-6.8l-.1-.1a1.7 1.7 0 0 0-2.1-.4l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4.6 15l-.1-.2a1.7 1.7 0 0 0-1.6-1.2H2.7V10h.2a1.7 1.7 0 0 0 1.6-1.2l.1-.2a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2.1-.4l.1-.1h6.8l.1.1a1.7 1.7 0 0 0 2.1.4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9l.1.2a1.7 1.7 0 0 0 1.6 1.2h.2v3.6h-.2a1.7 1.7 0 0 0-1.6 1.2Z"></path>',
     login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="m10 17 5-5-5-5"></path><path d="M15 12H3"></path>',
+    tag: '<path d="M20.6 13.2 13.2 20.6a2 2 0 0 1-2.8 0L3 13.2V3h10.2l7.4 7.4a2 2 0 0 1 0 2.8Z"></path><circle cx="8" cy="8" r="1.5"></circle>',
     plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
     minus: '<path d="M5 12h14"></path>',
     trash: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path>',
@@ -826,6 +829,7 @@ function renderTopbar() {
 function renderNav() {
   const items = [
     ["pos", "POS", "pos"],
+    ["items", "Items", "tag"],
     ["inventory", "Stock", "box"],
     ["masters", "Masters", "users"],
     ["transactions", "Ledger", "list"],
@@ -851,6 +855,7 @@ function renderNav() {
 }
 
 function renderView() {
+  if (state.view === "items") return renderItemMaster();
   if (state.view === "inventory") return renderInventory();
   if (state.view === "masters") return renderMasters();
   if (state.view === "transactions") return renderTransactions();
@@ -1126,6 +1131,87 @@ function renderCartItem(line) {
   `;
 }
 
+function itemMasterProducts() {
+  const term = state.itemSearch.trim().toLowerCase();
+  return activeProducts()
+    .filter((product) => {
+      const category = findCategory(product.category_id)?.name || "";
+      const supplier = findSupplier(product.supplier_id)?.name || "";
+      return [product.name, product.sku, product.barcode, category, supplier].join(" ").toLowerCase().includes(term);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderItemMaster() {
+  const products = itemMasterProducts();
+  const selectedProduct = state.itemProductId ? findProduct(state.itemProductId) : null;
+  const formTitle = selectedProduct ? "Edit Item" : "New Item";
+
+  return `
+    <section class="toolbar">
+      <div>
+        <h2>Item Master</h2>
+        <p>Create and maintain products, prices, categories, suppliers, and barcode details.</p>
+      </div>
+      <div class="toolbar-actions">
+        <label class="search-box">
+          <span class="mini-label">Find item</span>
+          <input id="itemSearch" value="${esc(state.itemSearch)}" placeholder="Search item, code, barcode, category" autocomplete="off" />
+        </label>
+        <button class="button primary" data-action="new-product-form">${icon("plus")} New Item</button>
+      </div>
+    </section>
+
+    <section class="item-master-layout">
+      <div class="item-master-panel">
+        <div class="item-list-header">
+          <div>
+            <h3 class="panel-title">Items</h3>
+            <p>${products.length} active records</p>
+          </div>
+        </div>
+        <div class="item-master-list">
+          ${
+            products.length
+              ? products.map(renderItemMasterListItem).join("")
+              : `<div class="empty-state">${icon("empty")}<strong>No items found</strong><span>Create the first item master record.</span></div>`
+          }
+        </div>
+      </div>
+
+      <div class="item-form-panel">
+        <div class="item-form-header">
+          <div>
+            <h3>${formTitle}</h3>
+            <p>${selectedProduct ? `Editing ${esc(selectedProduct.sku)}` : `Next code ${esc(nextProductCode())}`}</p>
+          </div>
+        </div>
+        ${renderProductForm(selectedProduct, { variant: "screen" })}
+      </div>
+    </section>
+  `;
+}
+
+function renderItemMasterListItem(product) {
+  const category = findCategory(product.category_id)?.name || "Uncategorized";
+  const supplier = findSupplier(product.supplier_id)?.name || "No supplier";
+  const low = toNumber(product.current_stock) <= toNumber(product.low_stock_level);
+  const active = state.itemProductId === product.id;
+
+  return `
+    <button class="item-master-list-item ${active ? "active" : ""}" data-action="edit-product" data-product-id="${product.id}">
+      <span class="item-master-main">
+        <strong>${esc(product.name)}</strong>
+        <span>${esc(product.sku)} - ${esc(category)} - ${esc(supplier)}</span>
+      </span>
+      <span class="item-master-side">
+        <strong>${money(product.selling_price)}</strong>
+        <span class="stock-badge ${low ? "low" : ""}">${qty(product.current_stock)}</span>
+      </span>
+    </button>
+  `;
+}
+
 function renderInventory() {
   const term = state.inventorySearch.trim().toLowerCase();
   const products = activeProducts().filter((product) => {
@@ -1138,14 +1224,14 @@ function renderInventory() {
     <section class="toolbar">
       <div>
         <h2>Inventory</h2>
-        <p>Manage products and post GRN or PRN inventory documents.</p>
+        <p>Review stock balances and post GRN or PRN inventory documents.</p>
       </div>
       <div class="toolbar-actions">
         <label class="search-box">
           <span class="mini-label">Find product</span>
           <input id="inventorySearch" value="${esc(state.inventorySearch)}" placeholder="Search inventory" autocomplete="off" />
         </label>
-        <button class="button primary" data-action="open-product-modal">${icon("plus")} Add Product</button>
+        <button class="button primary" data-action="open-product-modal">${icon("tag")} Item Master</button>
       </div>
     </section>
 
@@ -1191,7 +1277,7 @@ function renderInventoryRow(product) {
         <div class="table-actions">
           <button class="button secondary" data-action="open-stock-modal" data-direction="grn" data-product-id="${product.id}">GRN</button>
           <button class="button secondary" data-action="open-stock-modal" data-direction="prn" data-product-id="${product.id}">PRN</button>
-          <button class="button secondary" data-action="open-product-modal" data-product-id="${product.id}">Edit</button>
+          <button class="button secondary" data-action="open-product-modal" data-product-id="${product.id}">Edit Item</button>
         </div>
       </td>
     </tr>
@@ -1216,7 +1302,7 @@ function renderInventoryCard(product) {
       <div class="table-actions">
         <button class="button secondary" data-action="open-stock-modal" data-direction="grn" data-product-id="${product.id}">GRN</button>
         <button class="button secondary" data-action="open-stock-modal" data-direction="prn" data-product-id="${product.id}">PRN</button>
-        <button class="button secondary" data-action="open-product-modal" data-product-id="${product.id}">Edit</button>
+        <button class="button secondary" data-action="open-product-modal" data-product-id="${product.id}">Edit Item</button>
       </div>
     </article>
   `;
@@ -1975,7 +2061,6 @@ function renderAuthPanel(variant = "settings") {
 function renderModal() {
   if (!state.modal) return "";
   if (state.modal.type === "cart-line") return renderCartLineModal();
-  if (state.modal.type === "product") return renderProductModal();
   if (state.modal.type === "stock") return renderStockModal();
   if (state.modal.type === "customer") return renderCustomerModal();
   if (state.modal.type === "supplier") return renderSupplierModal();
@@ -2039,98 +2124,89 @@ function renderCartLineModal() {
   `;
 }
 
-function renderProductModal() {
-  const product = state.modal.productId ? findProduct(state.modal.productId) : null;
-  const title = product ? "Edit Product" : "Add Product";
+function renderProductForm(product, options = {}) {
+  const isScreen = options.variant === "screen";
   const categories = activeCategories();
   const suppliers = activeSuppliers();
   const productCode = product?.sku || nextProductCode();
 
   return `
-    <div class="modal-backdrop">
-      <section class="modal" role="dialog" aria-modal="true">
-        <header>
-          <h3>${title}</h3>
-          <button class="icon-button" data-action="close-modal" title="Close">${icon("close")}</button>
-        </header>
-        <form id="productForm">
-          <div class="modal-body form-grid">
-            <input type="hidden" name="id" value="${esc(product?.id || "")}" />
-            <label class="field">
-              <span>Product name</span>
-              <input name="name" value="${esc(product?.name || "")}" required />
-            </label>
-            <label class="field">
-              <span>Product code</span>
-              <input name="sku" value="${esc(productCode)}" readonly required />
-            </label>
-            <label class="field">
-              <span>Barcode</span>
-              <input name="barcode" value="${esc(product?.barcode || "")}" />
-            </label>
-            <label class="field">
-              <span>Category</span>
-              <select name="category_id">
-                <option value="">Uncategorized</option>
-                ${categories
-                  .map(
-                    (category) => `
-                      <option value="${category.id}" ${product?.category_id === category.id ? "selected" : ""}>${esc(category.name)}</option>
-                    `
-                  )
-                  .join("")}
-              </select>
-            </label>
-            <label class="field full">
-              <span>New category name</span>
-              <input name="new_category" placeholder="Optional" />
-            </label>
-            <label class="field">
-              <span>Supplier</span>
-              <select name="supplier_id">
-                <option value="">No supplier</option>
-                ${suppliers
-                  .map(
-                    (supplier) => `
-                      <option value="${supplier.id}" ${product?.supplier_id === supplier.id ? "selected" : ""}>${esc(supplier.name)}</option>
-                    `
-                  )
-                  .join("")}
-              </select>
-            </label>
-            <label class="field">
-              <span>Cost price</span>
-              <input name="cost_price" type="number" min="0" step="0.01" value="${esc(product?.cost_price ?? 0)}" inputmode="decimal" />
-            </label>
-            <label class="field">
-              <span>Selling price</span>
-              <input name="selling_price" type="number" min="0" step="0.01" value="${esc(product?.selling_price ?? "")}" inputmode="decimal" required />
-            </label>
-            <label class="field">
-              <span>${product ? "Current stock" : "Opening stock"}</span>
-              <input name="current_stock" type="number" min="0" step="0.001" value="${esc(product?.current_stock ?? 0)}" inputmode="decimal" ${product ? "readonly" : ""} />
-            </label>
-            <label class="field">
-              <span>Low-stock level</span>
-              <input name="low_stock_level" type="number" min="0" step="0.001" value="${esc(product?.low_stock_level ?? 5)}" inputmode="decimal" />
-            </label>
-            <label class="field">
-              <span>Tax %</span>
-              <input name="tax_rate" type="number" min="0" step="0.001" value="${esc(product?.tax_rate ?? state.data.settings.default_tax_rate ?? 0)}" inputmode="decimal" />
-            </label>
-            <label class="field">
-              <span>Image URL</span>
-              <input name="image_url" value="${esc(product?.image_url || "")}" />
-            </label>
-          </div>
-          <div class="modal-actions">
-            ${product ? `<button class="button danger" type="button" data-action="archive-product" data-product-id="${product.id}">Archive</button>` : ""}
-            <button class="button secondary" type="button" data-action="close-modal">Cancel</button>
-            <button class="button primary" type="submit">Save Product</button>
-          </div>
-        </form>
-      </section>
-    </div>
+    <form id="productForm" class="${isScreen ? "item-form" : ""}">
+      <div class="${isScreen ? "item-form-body form-grid" : "modal-body form-grid"}">
+        <input type="hidden" name="id" value="${esc(product?.id || "")}" />
+        <label class="field">
+          <span>Product name</span>
+          <input name="name" value="${esc(product?.name || "")}" required />
+        </label>
+        <label class="field">
+          <span>Product code</span>
+          <input name="sku" value="${esc(productCode)}" readonly required />
+        </label>
+        <label class="field">
+          <span>Barcode</span>
+          <input name="barcode" value="${esc(product?.barcode || "")}" />
+        </label>
+        <label class="field">
+          <span>Category</span>
+          <select name="category_id">
+            <option value="">Uncategorized</option>
+            ${categories
+              .map(
+                (category) => `
+                  <option value="${category.id}" ${product?.category_id === category.id ? "selected" : ""}>${esc(category.name)}</option>
+                `
+              )
+              .join("")}
+          </select>
+        </label>
+        <label class="field full">
+          <span>New category name</span>
+          <input name="new_category" placeholder="Optional" />
+        </label>
+        <label class="field">
+          <span>Supplier</span>
+          <select name="supplier_id">
+            <option value="">No supplier</option>
+            ${suppliers
+              .map(
+                (supplier) => `
+                  <option value="${supplier.id}" ${product?.supplier_id === supplier.id ? "selected" : ""}>${esc(supplier.name)}</option>
+                `
+              )
+              .join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>Cost price</span>
+          <input name="cost_price" type="number" min="0" step="0.01" value="${esc(product?.cost_price ?? 0)}" inputmode="decimal" />
+        </label>
+        <label class="field">
+          <span>Selling price</span>
+          <input name="selling_price" type="number" min="0" step="0.01" value="${esc(product?.selling_price ?? "")}" inputmode="decimal" required />
+        </label>
+        <label class="field">
+          <span>${product ? "Current stock" : "Opening stock"}</span>
+          <input name="current_stock" type="number" min="0" step="0.001" value="${esc(product?.current_stock ?? 0)}" inputmode="decimal" ${product ? "readonly" : ""} />
+        </label>
+        <label class="field">
+          <span>Low-stock level</span>
+          <input name="low_stock_level" type="number" min="0" step="0.001" value="${esc(product?.low_stock_level ?? 5)}" inputmode="decimal" />
+        </label>
+        <label class="field">
+          <span>Tax %</span>
+          <input name="tax_rate" type="number" min="0" step="0.001" value="${esc(product?.tax_rate ?? state.data.settings.default_tax_rate ?? 0)}" inputmode="decimal" />
+        </label>
+        <label class="field">
+          <span>Image URL</span>
+          <input name="image_url" value="${esc(product?.image_url || "")}" />
+        </label>
+      </div>
+      <div class="${isScreen ? "item-form-actions" : "modal-actions"}">
+        ${product ? `<button class="button danger" type="button" data-action="archive-product" data-product-id="${product.id}">Archive</button>` : ""}
+        <button class="button secondary" type="button" data-action="${isScreen ? "new-product-form" : "close-modal"}">${isScreen ? "Clear" : "Cancel"}</button>
+        <button class="button primary" type="submit">${product ? "Save Item" : "Create Item"}</button>
+      </div>
+    </form>
   `;
 }
 
@@ -2973,9 +3049,10 @@ async function createCategoryIfNeeded(form) {
 async function saveProduct(form) {
   const productId = formValue(form, "id") || null;
   const product = productId ? findProduct(productId) : null;
+  let savedProductId = productId;
 
   if (state.sync.mode === "supabase" && !state.sync.connected) {
-    showToast("Sign in from Settings before saving products.");
+    showToast("Sign in before saving items.");
     return;
   }
 
@@ -3012,6 +3089,7 @@ async function saveProduct(form) {
           current_stock: openingStock
         }).select("*").single();
         if (error) throw error;
+        savedProductId = data.id;
         if (openingStock > 0) {
           const { error: movementError } = await supabase.from("inventory_movements").insert({
             product_id: data.id,
@@ -3029,6 +3107,7 @@ async function saveProduct(form) {
       await loadSupabaseData();
     } else if (product) {
       Object.assign(product, payload);
+      savedProductId = product.id;
       saveLocalData();
     } else {
       const createdProduct = {
@@ -3037,6 +3116,7 @@ async function saveProduct(form) {
         current_stock: toNumber(formValue(form, "current_stock")),
         created_at: nowIso()
       };
+      savedProductId = createdProduct.id;
       state.data.products.push(createdProduct);
       if (createdProduct.current_stock > 0) {
         state.data.inventory_movements.unshift({
@@ -3057,11 +3137,15 @@ async function saveProduct(form) {
       saveLocalData();
     }
 
-    state.modal = null;
-    showToast("Product saved.");
+    if (state.view === "items") {
+      state.itemProductId = savedProductId;
+    } else {
+      state.modal = null;
+    }
+    showToast("Item saved.");
   } catch (error) {
     console.error(error);
-    showToast(friendlyErrorMessage(error, "Could not save product."));
+    showToast(friendlyErrorMessage(error, "Could not save item."));
   }
 }
 
@@ -3074,14 +3158,15 @@ async function archiveProduct(productId) {
     } else {
       const product = findProduct(productId);
       if (product) product.is_active = false;
-      state.cart = state.cart.filter((line) => line.product_id !== productId);
       saveLocalData();
     }
+    state.cart = state.cart.filter((line) => line.product_id !== productId);
+    if (state.itemProductId === productId) state.itemProductId = null;
     state.modal = null;
-    showToast("Product archived.");
+    showToast("Item archived.");
   } catch (error) {
     console.error(error);
-    showToast(error.message || "Could not archive product.");
+    showToast(error.message || "Could not archive item.");
   }
 }
 
@@ -3416,6 +3501,7 @@ app.addEventListener("click", async (event) => {
 
   if (action === "nav") {
     state.view = target.dataset.view;
+    state.modal = null;
     render();
   }
 
@@ -3498,7 +3584,21 @@ app.addEventListener("click", async (event) => {
   }
 
   if (action === "open-product-modal") {
-    state.modal = { type: "product", productId: target.dataset.productId || null };
+    state.view = "items";
+    state.itemProductId = target.dataset.productId || null;
+    state.modal = null;
+    render();
+  }
+
+  if (action === "new-product-form") {
+    state.itemProductId = null;
+    state.modal = null;
+    render();
+  }
+
+  if (action === "edit-product") {
+    state.itemProductId = target.dataset.productId || null;
+    state.modal = null;
     render();
   }
 
@@ -3570,6 +3670,11 @@ app.addEventListener("input", (event) => {
   if (event.target.id === "inventorySearch") {
     state.inventorySearch = event.target.value;
     scheduleInputRender("inventorySearch");
+  }
+
+  if (event.target.id === "itemSearch") {
+    state.itemSearch = event.target.value;
+    scheduleInputRender("itemSearch");
   }
 
   if (event.target.id === "masterSearch") {
