@@ -416,6 +416,25 @@ function showToast(message) {
   }, 2600);
 }
 
+function friendlyErrorMessage(error, fallback) {
+  const message = error?.message || "";
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("row-level security") || normalized.includes("permission denied")) {
+    return "Save blocked by Supabase permissions. Sign in as admin or run the admin SQL for this email.";
+  }
+
+  if (normalized.includes("relation") && normalized.includes("does not exist")) {
+    return "Supabase tables are missing. Run supabase/schema.sql in the SQL Editor.";
+  }
+
+  if (normalized.includes("next_product_code") || normalized.includes("product_code_seq")) {
+    return "Product code setup is missing. Run supabase/fix-product-save.sql in the SQL Editor.";
+  }
+
+  return message || fallback;
+}
+
 function scheduleInputRender(inputId) {
   window.clearTimeout(scheduleInputRender.timer);
   scheduleInputRender.timer = window.setTimeout(() => {
@@ -2883,29 +2902,35 @@ async function createCategoryIfNeeded(form) {
 
 async function saveProduct(form) {
   const productId = form.id.value || null;
-  const categoryId = await createCategoryIfNeeded(form);
   const product = productId ? findProduct(productId) : null;
-  const productCode = product?.sku || nextProductCode(productId);
-  const payload = {
-    category_id: categoryId,
-    supplier_id: form.supplier_id.value || null,
-    name: form.name.value.trim(),
-    sku: productCode,
-    barcode: form.barcode.value.trim() || null,
-    cost_price: toNumber(form.cost_price.value),
-    selling_price: toNumber(form.selling_price.value),
-    low_stock_level: toNumber(form.low_stock_level.value),
-    tax_rate: toNumber(form.tax_rate.value),
-    image_url: form.image_url.value.trim() || null,
-    is_active: true
-  };
 
-  if (!payload.name || !payload.sku) {
-    showToast("Product name and product code are required.");
+  if (state.sync.mode === "supabase" && !state.sync.connected) {
+    showToast("Sign in from Settings before saving products.");
     return;
   }
 
   try {
+    const categoryId = await createCategoryIfNeeded(form);
+    const productCode = product?.sku || nextProductCode(productId);
+    const payload = {
+      category_id: categoryId,
+      supplier_id: form.supplier_id.value || null,
+      name: form.name.value.trim(),
+      sku: productCode,
+      barcode: form.barcode.value.trim() || null,
+      cost_price: toNumber(form.cost_price.value),
+      selling_price: toNumber(form.selling_price.value),
+      low_stock_level: toNumber(form.low_stock_level.value),
+      tax_rate: toNumber(form.tax_rate.value),
+      image_url: form.image_url.value.trim() || null,
+      is_active: true
+    };
+
+    if (!payload.name || !payload.sku) {
+      showToast("Product name and product code are required.");
+      return;
+    }
+
     if (state.sync.connected && supabase) {
       if (productId) {
         const { error } = await supabase.from("products").update(payload).eq("id", productId);
@@ -2966,7 +2991,7 @@ async function saveProduct(form) {
     showToast("Product saved.");
   } catch (error) {
     console.error(error);
-    showToast(error.message || "Could not save product.");
+    showToast(friendlyErrorMessage(error, "Could not save product."));
   }
 }
 
