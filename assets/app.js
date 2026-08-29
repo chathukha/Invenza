@@ -435,6 +435,19 @@ function friendlyErrorMessage(error, fallback) {
   return message || fallback;
 }
 
+function formField(form, name) {
+  return form.elements.namedItem(name);
+}
+
+function formValue(form, name, fallback = "") {
+  const field = formField(form, name);
+  return field && "value" in field ? field.value : fallback;
+}
+
+function formTrim(form, name) {
+  return formValue(form, name).trim();
+}
+
 function scheduleInputRender(inputId) {
   window.clearTimeout(scheduleInputRender.timer);
   scheduleInputRender.timer = window.setTimeout(() => {
@@ -2572,14 +2585,14 @@ function removeCartItem(productId) {
 }
 
 function saveCartLine(form) {
-  const productId = form.product_id.value;
+  const productId = formValue(form, "product_id");
   const line = state.cart.find((item) => item.product_id === productId);
   const product = findProduct(productId);
   if (!line || !product) return;
 
-  const quantity = toNumber(form.quantity.value);
-  const discountValue = toNumber(form.discount_value.value);
-  const discountType = form.discount_type.value;
+  const quantity = toNumber(formValue(form, "quantity"));
+  const discountValue = toNumber(formValue(form, "discount_value"));
+  const discountType = formValue(form, "discount_type");
 
   if (quantity <= 0) {
     showToast("Quantity must be greater than zero.");
@@ -2600,14 +2613,14 @@ function saveCartLine(form) {
 }
 
 function updateCartLinePreview(form) {
-  const product = findProduct(form.product_id.value);
+  const product = findProduct(formValue(form, "product_id"));
   if (!product) return;
 
-  const quantity = Math.max(0, toNumber(form.quantity.value));
+  const quantity = Math.max(0, toNumber(formValue(form, "quantity")));
   const gross = roundMoney(toNumber(product.selling_price) * quantity);
-  const discountValue = Math.max(0, toNumber(form.discount_value.value));
+  const discountValue = Math.max(0, toNumber(formValue(form, "discount_value")));
   const discount =
-    form.discount_type.value === "percent"
+    formValue(form, "discount_type") === "percent"
       ? roundMoney(gross * Math.min(discountValue, 100) / 100)
       : roundMoney(Math.min(discountValue, gross));
   const net = roundMoney(Math.max(0, gross - discount));
@@ -2875,8 +2888,8 @@ async function completeCheckout() {
 }
 
 async function createCategoryIfNeeded(form) {
-  const name = form.new_category.value.trim();
-  if (!name) return form.category_id.value || null;
+  const name = formTrim(form, "new_category");
+  if (!name) return formValue(form, "category_id") || null;
 
   const existing = activeCategories().find((category) => category.name.toLowerCase() === name.toLowerCase());
   if (existing) return existing.id;
@@ -2901,7 +2914,7 @@ async function createCategoryIfNeeded(form) {
 }
 
 async function saveProduct(form) {
-  const productId = form.id.value || null;
+  const productId = formValue(form, "id") || null;
   const product = productId ? findProduct(productId) : null;
 
   if (state.sync.mode === "supabase" && !state.sync.connected) {
@@ -2914,15 +2927,15 @@ async function saveProduct(form) {
     const productCode = product?.sku || nextProductCode(productId);
     const payload = {
       category_id: categoryId,
-      supplier_id: form.supplier_id.value || null,
-      name: form.name.value.trim(),
+      supplier_id: formValue(form, "supplier_id") || null,
+      name: formTrim(form, "name"),
       sku: productCode,
-      barcode: form.barcode.value.trim() || null,
-      cost_price: toNumber(form.cost_price.value),
-      selling_price: toNumber(form.selling_price.value),
-      low_stock_level: toNumber(form.low_stock_level.value),
-      tax_rate: toNumber(form.tax_rate.value),
-      image_url: form.image_url.value.trim() || null,
+      barcode: formTrim(form, "barcode") || null,
+      cost_price: toNumber(formValue(form, "cost_price")),
+      selling_price: toNumber(formValue(form, "selling_price")),
+      low_stock_level: toNumber(formValue(form, "low_stock_level")),
+      tax_rate: toNumber(formValue(form, "tax_rate")),
+      image_url: formTrim(form, "image_url") || null,
       is_active: true
     };
 
@@ -2936,7 +2949,7 @@ async function saveProduct(form) {
         const { error } = await supabase.from("products").update(payload).eq("id", productId);
         if (error) throw error;
       } else {
-        const openingStock = toNumber(form.current_stock.value);
+        const openingStock = toNumber(formValue(form, "current_stock"));
         const { data, error } = await supabase.from("products").insert({
           ...payload,
           current_stock: openingStock
@@ -2964,7 +2977,7 @@ async function saveProduct(form) {
       const createdProduct = {
         id: makeId(),
         ...payload,
-        current_stock: toNumber(form.current_stock.value),
+        current_stock: toNumber(formValue(form, "current_stock")),
         created_at: nowIso()
       };
       state.data.products.push(createdProduct);
@@ -3016,13 +3029,13 @@ async function archiveProduct(productId) {
 }
 
 async function saveStockMovement(form) {
-  const productId = form.product_id.value;
-  const direction = form.direction.value;
-  const quantity = toNumber(form.quantity.value);
+  const productId = formValue(form, "product_id");
+  const direction = formValue(form, "direction");
+  const quantity = toNumber(formValue(form, "quantity"));
   const delta = direction === "grn" ? quantity : -quantity;
-  const reason = form.reason.value.trim();
-  const supplierId = form.supplier_id?.value || null;
-  const documentNo = form.document_no.value.trim() || nextInventoryDocumentNo(direction);
+  const reason = formTrim(form, "reason");
+  const supplierId = formValue(form, "supplier_id") || null;
+  const documentNo = formTrim(form, "document_no") || nextInventoryDocumentNo(direction);
 
   if (quantity <= 0) {
     showToast("Quantity must be greater than zero.");
@@ -3075,14 +3088,14 @@ async function saveStockMovement(form) {
 }
 
 async function saveCustomer(form) {
-  const customerId = form.id.value || null;
+  const customerId = formValue(form, "id") || null;
   const customer = customerId ? findCustomer(customerId) : null;
   const payload = {
-    name: form.name.value.trim(),
-    phone: form.phone.value.trim(),
-    email: form.email.value.trim(),
-    address: form.address.value.trim(),
-    note: form.note.value.trim(),
+    name: formTrim(form, "name"),
+    phone: formTrim(form, "phone"),
+    email: formTrim(form, "email"),
+    address: formTrim(form, "address"),
+    note: formTrim(form, "note"),
     is_active: true
   };
 
@@ -3137,15 +3150,15 @@ async function archiveCustomer(customerId) {
 }
 
 async function saveSupplier(form) {
-  const supplierId = form.id.value || null;
+  const supplierId = formValue(form, "id") || null;
   const supplier = supplierId ? findSupplier(supplierId) : null;
   const payload = {
-    name: form.name.value.trim(),
-    contact_person: form.contact_person.value.trim(),
-    phone: form.phone.value.trim(),
-    email: form.email.value.trim(),
-    address: form.address.value.trim(),
-    note: form.note.value.trim(),
+    name: formTrim(form, "name"),
+    contact_person: formTrim(form, "contact_person"),
+    phone: formTrim(form, "phone"),
+    email: formTrim(form, "email"),
+    address: formTrim(form, "address"),
+    note: formTrim(form, "note"),
     is_active: true
   };
 
@@ -3199,12 +3212,12 @@ async function archiveSupplier(supplierId) {
 }
 
 async function saveCategory(form) {
-  const categoryId = form.id.value || null;
+  const categoryId = formValue(form, "id") || null;
   const category = categoryId ? findCategory(categoryId) : null;
   const payload = {
-    name: form.name.value.trim(),
-    color: form.color.value || "#0f766e",
-    sort_order: Math.trunc(toNumber(form.sort_order.value)),
+    name: formTrim(form, "name"),
+    color: formValue(form, "color") || "#0f766e",
+    sort_order: Math.trunc(toNumber(formValue(form, "sort_order"))),
     is_active: true
   };
 
@@ -3260,12 +3273,12 @@ async function archiveCategory(categoryId) {
 
 async function saveSettings(form) {
   const settings = {
-    store_name: form.store_name.value.trim(),
-    store_phone: form.store_phone.value.trim(),
-    store_address: form.store_address.value.trim(),
-    currency: form.currency.value.trim() || "LKR",
-    receipt_footer: form.receipt_footer.value.trim(),
-    default_tax_rate: toNumber(form.default_tax_rate.value)
+    store_name: formTrim(form, "store_name"),
+    store_phone: formTrim(form, "store_phone"),
+    store_address: formTrim(form, "store_address"),
+    currency: formTrim(form, "currency") || "LKR",
+    receipt_footer: formTrim(form, "receipt_footer"),
+    default_tax_rate: toNumber(formValue(form, "default_tax_rate"))
   };
 
   try {
@@ -3291,8 +3304,8 @@ async function handleAuth(form, mode) {
     return;
   }
 
-  const email = form.email.value.trim();
-  const password = form.password.value;
+  const email = formTrim(form, "email");
+  const password = formValue(form, "password");
 
   try {
     if (mode === "signup") {
@@ -3573,6 +3586,11 @@ app.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
     await handleAuth(form, submitter?.dataset.authMode || "signin");
   }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error(event.reason);
+  showToast(friendlyErrorMessage(event.reason, "Something went wrong while saving."));
 });
 
 async function boot() {
