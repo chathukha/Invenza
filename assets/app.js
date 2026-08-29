@@ -2912,9 +2912,8 @@ async function saveProduct(form) {
         if (error) throw error;
       } else {
         const openingStock = toNumber(form.current_stock.value);
-        const { sku, ...insertPayload } = payload;
         const { data, error } = await supabase.from("products").insert({
-          ...insertPayload,
+          ...payload,
           current_stock: openingStock
         }).select("*").single();
         if (error) throw error;
