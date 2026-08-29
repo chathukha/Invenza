@@ -3769,10 +3769,20 @@ window.addEventListener("unhandledrejection", (event) => {
   showToast(friendlyErrorMessage(event.reason, "Something went wrong while saving."));
 });
 
+function registerPwa() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!["http:", "https:"].includes(window.location.protocol)) return;
+
+  navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+    console.warn("Service worker registration failed.", error);
+  });
+}
+
 async function boot() {
   state.data = loadLocalData();
   await initSupabase();
   render();
+  registerPwa();
   window.setInterval(updateClock, 30000);
 }
 
