@@ -716,6 +716,7 @@ function icon(name) {
     box: '<path d="m3 7 9-4 9 4-9 4z"></path><path d="M3 7v10l9 4 9-4V7"></path><path d="M12 11v10"></path>',
     chart: '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-3"></path>',
     gear: '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2.1.4l-.1.1h-6.8l-.1-.1a1.7 1.7 0 0 0-2.1-.4l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4.6 15l-.1-.2a1.7 1.7 0 0 0-1.6-1.2H2.7V10h.2a1.7 1.7 0 0 0 1.6-1.2l.1-.2a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2.1-.4l.1-.1h6.8l.1.1a1.7 1.7 0 0 0 2.1.4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9l.1.2a1.7 1.7 0 0 0 1.6 1.2h.2v3.6h-.2a1.7 1.7 0 0 0-1.6 1.2Z"></path>',
+    login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="m10 17 5-5-5-5"></path><path d="M15 12H3"></path>',
     plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
     minus: '<path d="M5 12h14"></path>',
     trash: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path>',
@@ -728,7 +729,25 @@ function icon(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
 }
 
+function hasSupabaseConfig() {
+  const cfg = window.SUPABASE_CONFIG || {};
+  return Boolean(cfg.url && cfg.anonKey);
+}
+
+function shouldShowLoginPage() {
+  return hasSupabaseConfig() && state.sync.mode === "supabase" && !state.sync.connected;
+}
+
 function render() {
+  if (shouldShowLoginPage()) {
+    app.innerHTML = `
+      ${renderLoginPage()}
+      ${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}
+    `;
+    updateClock();
+    return;
+  }
+
   app.innerHTML = `
     ${renderTopbar()}
     <div class="main-shell">
@@ -739,6 +758,44 @@ function render() {
     ${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}
   `;
   updateClock();
+}
+
+function renderLoginPage() {
+  const storeName = state.data?.settings?.store_name || "TouchPOS Store";
+  const statusClass = state.sync.connected ? "online" : "";
+
+  return `
+    <main class="login-page">
+      <section class="login-shell" aria-label="Sign in">
+        <div class="login-brand-panel">
+          <div>
+            <div class="brand-mark login-mark">TP</div>
+            <p class="login-kicker">Invenza POS</p>
+            <h1>${esc(storeName)}</h1>
+            <p class="login-copy">Secure access for today's counter work.</p>
+          </div>
+          <div class="login-status">
+            <span class="clock" id="clock"></span>
+            <span class="status-pill">
+              <span class="status-dot ${statusClass}"></span>
+              ${esc(state.sync.message)}
+            </span>
+          </div>
+        </div>
+
+        <div class="login-card">
+          <div class="login-card-header">
+            <h2>Sign in</h2>
+            <p>Use your Supabase account to continue.</p>
+          </div>
+          ${renderAuthPanel("login")}
+          <div class="notice warning login-note">
+            New users can sign in after the first account is made admin in Supabase.
+          </div>
+        </div>
+      </section>
+    </main>
+  `;
 }
 
 function renderTopbar() {
@@ -1820,8 +1877,6 @@ function renderMovementTable(rows) {
 
 function renderSettings() {
   const settings = state.data.settings;
-  const cfg = window.SUPABASE_CONFIG || {};
-  const hasSupabaseConfig = Boolean(cfg.url && cfg.anonKey);
 
   return `
     <section class="toolbar">
@@ -1870,7 +1925,7 @@ function renderSettings() {
         <div class="panel-pad">
           <p><strong>Status:</strong> ${esc(state.sync.message)}</p>
           ${
-            hasSupabaseConfig
+            hasSupabaseConfig()
               ? renderAuthPanel()
               : `<div class="notice warning">
                   Add your Supabase Project URL and public anon key in config.js. Until then, the app runs in local demo mode.
@@ -1885,7 +1940,7 @@ function renderSettings() {
   `;
 }
 
-function renderAuthPanel() {
+function renderAuthPanel(variant = "settings") {
   if (state.sync.connected) {
     return `
       <div class="notice">
@@ -1897,8 +1952,10 @@ function renderAuthPanel() {
     `;
   }
 
+  const isLogin = variant === "login";
+
   return `
-    <form id="authForm" class="form-grid">
+    <form id="authForm" class="${isLogin ? "login-form" : "form-grid"}">
       <label class="field full">
         <span>Email</span>
         <input name="email" type="email" autocomplete="email" required />
@@ -1907,9 +1964,9 @@ function renderAuthPanel() {
         <span>Password</span>
         <input name="password" type="password" autocomplete="current-password" required />
       </label>
-      <div class="full table-actions">
+      <div class="${isLogin ? "login-actions" : "full table-actions"}">
+        <button class="button primary" type="submit" data-auth-mode="signin">${isLogin ? icon("login") : ""} Sign In</button>
         <button class="button secondary" type="submit" data-auth-mode="signup">Create Account</button>
-        <button class="button primary" type="submit" data-auth-mode="signin">Sign In</button>
       </div>
     </form>
   `;
@@ -3309,17 +3366,24 @@ async function handleAuth(form, mode) {
 
   try {
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { full_name: email.split("@")[0] } }
       });
       if (error) throw error;
-      showToast("Account created. Run the admin bootstrap SQL, then sign in.");
+      if (data.session) {
+        await loadSupabaseData();
+        state.view = "pos";
+        showToast("Account created and signed in.");
+      } else {
+        showToast("Account created. Run the admin bootstrap SQL, then sign in.");
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       await loadSupabaseData();
+      state.view = "pos";
       showToast("Signed in.");
     }
     render();
@@ -3480,9 +3544,15 @@ app.addEventListener("click", async (event) => {
   if (action === "sign-out" && supabase) {
     await supabase.auth.signOut();
     state.data = loadLocalData();
+    state.sync.mode = "supabase";
     state.sync.connected = false;
     state.sync.message = "Supabase configured. Sign in.";
     state.sync.profile = null;
+    state.view = "pos";
+    state.cart = [];
+    state.customerId = "";
+    state.checkoutStep = "items";
+    state.salePayments = [];
     render();
   }
 });

@@ -65,6 +65,134 @@ button {
   text-align: center;
 }
 
+.login-page {
+  align-items: center;
+  background:
+    linear-gradient(135deg, #eef3ef 0%, #f7f8f5 52%, #fff8ed 100%);
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-shell {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 420px);
+  min-height: 620px;
+  overflow: hidden;
+  width: min(960px, 100%);
+}
+
+.login-brand-panel {
+  background: #17211d;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  justify-content: space-between;
+  padding: 40px;
+}
+
+.login-mark {
+  height: 64px;
+  margin-bottom: 28px;
+  width: 64px;
+}
+
+.login-kicker {
+  color: #9fd9d2;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.login-brand-panel h1 {
+  font-size: 36px;
+  line-height: 1.05;
+  margin: 0;
+  max-width: 420px;
+}
+
+.login-copy {
+  color: #d8e2dd;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 16px 0 0;
+  max-width: 360px;
+}
+
+.login-status {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+}
+
+.login-status .clock {
+  color: #d8e2dd;
+}
+
+.login-status .status-pill {
+  background: #22362f;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f8fbf9;
+  width: fit-content;
+}
+
+.login-card {
+  align-content: center;
+  display: grid;
+  gap: 18px;
+  padding: 40px;
+}
+
+.login-card-header h2 {
+  font-size: 28px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.login-card-header p {
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-form .field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.login-form .field input {
+  font-size: 17px;
+  min-height: 56px;
+}
+
+.login-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.login-actions .button {
+  min-height: 54px;
+}
+
+.login-note {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .brand-mark {
   align-items: center;
   background: var(--primary);
@@ -266,6 +394,12 @@ button {
 
 .button.full-width {
   width: 100%;
+}
+
+.button svg {
+  flex: 0 0 auto;
+  height: 20px;
+  width: 20px;
 }
 
 .icon-button {
@@ -1183,6 +1317,41 @@ button {
     --header-height: 68px;
   }
 
+  .login-page {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .login-shell {
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 24px);
+  }
+
+  .login-brand-panel {
+    gap: 18px;
+    padding: 24px;
+  }
+
+  .login-mark {
+    height: 56px;
+    margin-bottom: 18px;
+    width: 56px;
+  }
+
+  .login-brand-panel h1 {
+    font-size: 28px;
+  }
+
+  .login-copy {
+    font-size: 15px;
+    margin-top: 10px;
+  }
+
+  .login-card {
+    align-content: start;
+    padding: 24px;
+  }
+
   .topbar {
     align-items: flex-start;
     gap: 10px;
@@ -1267,6 +1436,29 @@ button {
 }
 
 @media (max-width: 620px) {
+  .login-page {
+    padding: 0;
+  }
+
+  .login-shell {
+    border: 0;
+    border-radius: 0;
+    min-height: 100vh;
+  }
+
+  .login-brand-panel,
+  .login-card {
+    padding: 18px;
+  }
+
+  .login-brand-panel h1 {
+    font-size: 24px;
+  }
+
+  .login-card-header h2 {
+    font-size: 24px;
+  }
+
   .topbar-actions {
     align-items: flex-end;
     flex-direction: column;
