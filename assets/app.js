@@ -3574,15 +3574,16 @@ app.addEventListener("keydown", (event) => {
 app.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
+  const formId = form.getAttribute("id");
 
-  if (form.id === "cartLineForm") saveCartLine(form);
-  if (form.id === "productForm") await saveProduct(form);
-  if (form.id === "stockForm") await saveStockMovement(form);
-  if (form.id === "customerForm") await saveCustomer(form);
-  if (form.id === "supplierForm") await saveSupplier(form);
-  if (form.id === "categoryForm") await saveCategory(form);
-  if (form.id === "settingsForm") await saveSettings(form);
-  if (form.id === "authForm") {
+  if (formId === "cartLineForm") saveCartLine(form);
+  if (formId === "productForm") await saveProduct(form);
+  if (formId === "stockForm") await saveStockMovement(form);
+  if (formId === "customerForm") await saveCustomer(form);
+  if (formId === "supplierForm") await saveSupplier(form);
+  if (formId === "categoryForm") await saveCategory(form);
+  if (formId === "settingsForm") await saveSettings(form);
+  if (formId === "authForm") {
     const submitter = event.submitter;
     await handleAuth(form, submitter?.dataset.authMode || "signin");
   }
