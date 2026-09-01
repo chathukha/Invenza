@@ -805,51 +805,91 @@ function renderTopbar() {
   const profile = state.sync.profile;
   const userName = profile?.full_name || profile?.email || "Cashier";
   const statusClass = state.sync.connected ? "online" : "";
+  const role = profile?.role || (state.sync.mode === "demo" ? "demo" : "user");
 
   return `
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">TP</div>
-        <div>
-          <h1>${esc(state.data?.settings?.store_name || "TouchPOS Store")}</h1>
-          <p>${esc(userName)}${profile?.role ? ` - ${esc(profile.role)}` : ""}</p>
-        </div>
+      <div class="topbar-title">
+        <span>Workspace</span>
+        <strong>${esc(state.data?.settings?.store_name || "TouchPOS Store")}</strong>
       </div>
       <div class="topbar-actions">
+        <div class="topbar-user">
+          <strong>${esc(userName)}</strong>
+          <span>${esc(role)}</span>
+        </div>
         <span class="clock" id="clock"></span>
         <span class="status-pill">
           <span class="status-dot ${statusClass}"></span>
           ${esc(state.sync.message)}
         </span>
+        ${state.sync.connected && supabase ? `<button class="button secondary topbar-signout" data-action="sign-out">Sign Out</button>` : ""}
       </div>
     </header>
   `;
 }
 
-function renderNav() {
-  const items = [
-    ["pos", "POS", "pos"],
-    ["items", "Items", "tag"],
-    ["inventory", "Stock", "box"],
-    ["masters", "Masters", "users"],
-    ["transactions", "Ledger", "list"],
-    ["bincard", "Bin Card", "box"],
-    ["reports", "Reports", "chart"],
-    ["settings", "Settings", "gear"]
-  ];
-
+function renderNavGroup(label, items) {
   return `
-    <nav class="side-nav" aria-label="Main">
+    <div class="side-nav-section">
+      <span class="nav-section-label">${esc(label)}</span>
       ${items
         .map(
-          ([id, label, iconName]) => `
+          ([id, text, iconName]) => `
             <button class="nav-button ${state.view === id ? "active" : ""}" data-action="nav" data-view="${id}">
               ${icon(iconName)}
-              <span>${label}</span>
+              <span>${esc(text)}</span>
             </button>
           `
         )
         .join("")}
+    </div>
+  `;
+}
+
+function renderNav() {
+  const statusClass = state.sync.connected ? "online" : "";
+  const groups = [
+    {
+      label: "Register",
+      items: [
+        ["pos", "Sales", "pos"],
+        ["items", "Items", "tag"],
+        ["inventory", "Stock", "box"]
+      ]
+    },
+    {
+      label: "Back Office",
+      items: [
+        ["masters", "Masters", "users"],
+        ["transactions", "Ledger", "list"],
+        ["bincard", "Bin Card", "box"],
+        ["reports", "Reports", "chart"]
+      ]
+    },
+    {
+      label: "System",
+      items: [["settings", "Settings", "gear"]]
+    }
+  ];
+
+  return `
+    <nav class="side-nav" aria-label="Main">
+      <div class="sidebar-brand">
+        <div class="brand-mark">TP</div>
+        <div>
+          <strong>Invenza POS</strong>
+          <span>Retail operations</span>
+        </div>
+      </div>
+      ${groups.map((group) => renderNavGroup(group.label, group.items)).join("")}
+      <div class="side-nav-foot">
+        <span class="status-dot ${statusClass}"></span>
+        <div>
+          <strong>${esc(state.sync.connected ? "Online" : "Local")}</strong>
+          <span>${esc(state.sync.message)}</span>
+        </div>
+      </div>
     </nav>
   `;
 }
